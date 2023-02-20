@@ -1,0 +1,3 @@
+Birth[1, truncatedGaussian[0.1, 200]]
+DensityIndependentDeath[1, 0.1]
+DeathByCompetition[1, truncatedGaussian[1000, 200]]

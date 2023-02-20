@@ -1,0 +1,123 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+source("rfunctions.R")
+library('knitr')
+library('dplyr')
+```
+
+```{r}
+# Compile simulator
+run.string = paste0("gcc ppsimulator.c -lm -O2 -o ppsimulator")
+system(run.string, intern = FALSE, wait = TRUE) # Compile time: a few seconds
+```
+
+# Create a single simulation {#sec-create-a-single-simulation}
+
+-   Put the common files like input data into a `data` folder, and create separate folders for specific model definition and its corresponding results
+
+-   The parameter should be chosen with care, otherwise the number of points would *explode*
+
+-   Execution time is related to `U`, `W`, `H` and the `number of points`
+
+```{r}
+### parameters
+
+# seed for Random Number Generator
+SeedNum = 1 
+
+# basic simulation parameters:
+dim = 2
+U = 33000
+T = 6  #simulating six years
+dT = 1
+w = 500
+H = 1
+
+# initial input points
+initial = "2015_restaurant.csv"
+#initial = "xinSeed1"
+
+
+# model name for saving model output
+model_name = "test1"
+```
+
+```{r}
+# run simulation
+setwd(model_name)
+run.string = paste0("../ppsimulator"," -p ../processes.txt"," -m model.txt",
+                    " -i ../data/",initial," -o out_seed",toString(SeedNum),
+                    " -oute 0", " -osep out_points_seed",toString(SeedNum),
+                    " -U ",toString(U), " -w ",toString(w), " -H ",toString(H),
+                    " -T ",toString(T)," -dT ",toString(dT),
+                    " -r ",toString(SeedNum))
+system(run.string, intern = FALSE, wait = TRUE)
+```
+
+```{r}
+### 4) Calculate and save all second spatial moments (correlation functions)
+setwd(dataDirectory)
+snapshotsN <- T/dT + 2 #including the initial point at t=0, and a final point
+for(i in 2:(snapshotsN-1)){  #i=1 is the initial conditions, and i=last is the same as i=last-1
+  if(i<10){
+    filename=paste0(nameOutPoints,"00000",i)
+  } else {
+    filename=paste0(nameOutPoints,"0000",i)
+  }
+  table=read.table(filename)
+  y.coord1=get.coords.one.species.singletime(table,sp=1)
+  y.coord2=get.coords.one.species.singletime(table,sp=2)
+  
+  dist= spx(y.coord1,y.coord1,U=U,grid.resolution=grid.resolution)[,1][2:(U/2/grid.resolution+1)];
+  g11 = spx(y.coord1,y.coord1,U=U,grid.resolution=grid.resolution)[,2][2:(U/2/grid.resolution+1)];
+  g12 = spx(y.coord1,y.coord2,U=U,grid.resolution=grid.resolution)[,2][2:(U/2/grid.resolution+1)];
+  g22 = spx(y.coord2,y.coord2,U=U,grid.resolution=grid.resolution)[,2][2:(U/2/grid.resolution+1)];
+  #g21= spx(y.coord2,y.coord1,U=U,grid.resolution=grid.resolution)[,2][2:(U/2/grid.resolution+1)];
+  
+  res=cbind(dist,g11,g12,g22);
+  obj <- data.frame(res)
+  save(obj, file = paste0(nameAllCumulants,"snapshot",toString(i),".RData"))
+}
+```
+
+## Visualize results
+
+```{r}
+# Density of points
+n=read.table(paste0(model_name,"/out_seed",toString(SeedNum),".counts"), header=T)
+plot.species.density(n,U=U,dim=dim)
+```
+
+```{r}
+# Snapshot of dynamics
+snapshot=5
+filename=paste0(model_name,"/out_points_seed",toString(SeedNum),"00000",snapshot)
+table=read.table(filename)
+coord=cbind(table$V2,table$V3)
+species=table$V1
+plot.points(coord,species, spch=c(1),scol=c("red","blue"),scex=c(1.5,1.5),xlab="x",ylab="y",U=U)
+
+```
+
+```{r}
+#======== Cumulants
+#Load two-point spatial moments
+filename=paste0(dataDirectory, nameAllCumulants,"snapshot",snapshot,".RData")
+load(filename)
+x <- obj$dist
+k11 <- obj$g11 #correlation function
+#Load density
+n=read.table(paste0(dataDirectory, nameOutDensities,".counts"),header=T)
+q <- vector(length = 2)
+for(sp in 1:2) {
+  q[sp] <- n[,3+sp][snapshot]/U/U
+}
+#cumulant
+c11 <- k11-q[1]*q[1]
+ylim=c(-0.15,0.15)
+plot(x,c11,type="l",ylim=ylim,xlim=c(0,U/2),col="red",lwd=2,ylab="g11(x)")
+```
