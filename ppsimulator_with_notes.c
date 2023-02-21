@@ -5073,7 +5073,7 @@ int main(int argc, char **argv)
 
   initializeActivities(s, processes, num_model_functions, ckernels, num_ckernels, okernels, num_okernels);
 
-  if (info > 1)
+  if (info > -1)
   {
     printProcessModules(p, num_process_modules);
     printModelFunctions(m, num_model_functions);
